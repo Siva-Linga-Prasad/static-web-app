@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+
+    environment {
+        GIT_REPO_URL = 'https://github.com/Siva-Linga-Prasad/static-web-app.git'
+        BRANCH = 'main'
+        REMOTE_HOST = '54.204.232.10'
+        REMOTE_USER = 'ec2-user'
+        SSH_KEY_CRED_ID = 'nginx_creds'
+        DEPLOY_PATH = '/usr/share/nginx/html'
+    }
+
+    stages {
+        stage('Clone Git Repository') {
+            steps {
+                git branch: "${BRANCH}", url: "${GIT_REPO_URL}"
+            }
+        }
+
+        stage('Deploy to Nginx Server') {
+            steps {
+                sshagent (credentials: [SSH_KEY_CRED_ID]) {
+                    sh """
+                        echo "🧹 Cleaning old files from Nginx web root..."
+                        ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} 'sudo rm -rf ${DEPLOY_PATH}/*'
+
+                        echo "📤 Uploading new static files..."
+                        scp -o StrictHostKeyChecking=no -r * ${REMOTE_USER}@${REMOTE_HOST}:/tmp/nginx-site/
+
+                        echo "🚀 Deploying files and restarting Nginx..."
+                        ssh ${REMOTE_USER}@${REMOTE_HOST} 'sudo cp -r /tmp/nginx-site/* ${DEPLOY_PATH}/ && sudo systemctl restart nginx'
+                    """
+                }
+            }
+        }
+    }
+}
